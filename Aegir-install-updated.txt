@@ -1,0 +1,148 @@
+Step 1: Install needed software
+	install Virtualbox and Vagrant
+	
+Step 2: Install Debian8 VB
+	mkdir on localbox: .../vms/cpag
+	>cd /cygdrive/f/fishlair/fishladder/cpagardens/vms/cpag3
+	>vagrant init debian/jessie64
+	>vagrant up --provider virtualbox
+	>vagrant ssh
+	$cat /etc/debian_version
+		should show 8.6
+	$exit
+	>vagrant halt
+	
+	
+Step 3: Configure the VM
+	Launch Virtualbox gui	
+		NOTE: Sam had to go into File->Preferences->Network and manually add
+		virtualbox->vms_default...->Network
+			activate adapter 2: set to Host-Only
+ 				Enable Network Adapter
+ 				Attached to: Host-only Adapter
+ 				Name: Virtualbox Host-Only Ethernet Adapter			
+		set a higher memory: at least 1024 and more cores
+	Edit Vagrantfile: 
+		add config.vm.hostname = "web.my.net"
+		add config.vm.network "private_network", ip: "192.168.33.10"
+		add config.vm.hostname = "web.my.net"
+	TODO: add the things I'm doing in Virtualbox to Vagrantfile
+
+	>vagrant up
+	>vagrant ssh
+	
+Step 4: Configure local hosts file and VM hosts file
+	Edit vm hosts file: /etc/hosts
+		$sudo apt-get install vim
+		$sudo vim /etc/hosts
+			add an entry for web
+			127.0.0.1       web.my.net     web
+	Test: should now ping VM
+	NOTE: this should not be necessary 
+	
+	Edit local hosts file: C:\WIndows\System32\drivers\etc\hosts
+		add an entry for web
+		192.168.33.10	web.my.net
+	Test: should now ping WM
+
+Step 5: Install stack onto VM
+	>vagrant reload -- Don't think this step is needed
+	>vagrant ssh
+	
+	$ sudo aptitude update && sudo aptitude safe-upgrade
+	$ sudo updatedb
+	
+	TODO: update what gets installed:
+	$ sudo apt-get install nginx php5-fpm php5 php5-cli php5-gd php5-mysql php-pear postfix sudo rsync git-core unzip
+	$sudo apt-get install nginx php7.0-fpm php7.0 php7.0-cli php7.0-gd php7.0-mysql php-pear postfix sudo rsync git-core unzip
+		TODO: these don't find php7 - need to fix this
+		set mail to localonly and server name to same as in vagrant file
+
+	TODO: change this to MariaDB	
+	$ sudo apt-get install mysql-server
+	$ sudo apt-get install mariadb-server mariadb-client
+		Note: prod is running MariaDB: 10.0.27-MariaDB-1~jessie 
+	
+	Make sure you can hit the nginx server from host browser
+		should say ~Welcome to nginx!
+
+Step 6: Configure stack
+	TODO: add link to docs
+	Add users
+		$ sudo adduser --system --group --home /var/aegir aegir
+		$ sudo adduser aegir www-data
+	Check nginx
+		$ sudo nginx -tv
+		$ ps waux | grep nginx 
+			its running
+		$ sudo ln -s /var/aegir/config/nginx.conf /etc/nginx/conf.d/aegir.conf
+	Config sudoers
+		$ sudo --preserve-env visudo --file=/etc/sudoers.d/aegir
+			add:
+				Defaults:aegir  !requiretty
+				aegir ALL=NOPASSWD: /etc/init.d/nginx
+			NOTE: save as real file not temp - backspace the four lines
+	Config mysql
+		$ sudo apt-get install vim (if need be)
+		$ sudo vim /etc/mysql/my.cnf
+			comment out #bind-address (find via /bind-address
+		$ sudo /etc/init.d/mysql restart
+			ok
+			
+Step 7: Install Drush
+	cd ~
+	$ php -r "readfile('https://s3.amazonaws.com/files.drush.org/drush.phar');" > drush
+	$ php drush core-status
+		 PHP configuration      :  /etc/php5/cli/php.ini
+		 PHP OS                 :  Linux
+		 Drush script           :  /home/vagrant/drush
+		 Drush version          :  8.1.8
+		 Drush temp directory   :  /tmp
+		 Drush configuration    :
+		 Drush alias files      :
+	$ chmod +x drush
+	$ sudo mv drush /usr/local/bin
+	$ drush init
+
+Step 8: Install Aegir
+	$ sudo -u aegir -s -H
+
+TEST: drush dl --destination=/var/aegir/.drush provision-7.x-3.0
+	$ drush dl --destination=/var/aegir/.drush provision-7.x-3.7
+	$ drush cache-clear drush
+	$ drush hostmaster-install --http_service_type=nginx
+		The following settings will be used:
+		Aegir frontend URL: web.my.net
+		Master server FQDN: web.my.net
+		Aegir root: /var/aegir
+		Aegir user: aegir
+		Web group: www-data
+		Web server: nginx
+		Web server port: 80
+		Aegir DB host: localhost
+		Aegir DB user: root
+		Aegir DB password: <prompted>
+		Aegir DB port: 3306
+		Aegir version: 7.x-3.7
+		Aegir platform path: /var/aegir/hostmaster-7.x-3.7
+		Admin email: webmaster@web.my.net
+		Aegir makefile: /var/aegir/.drush/provision/aegir.make
+		Aegir install profile: hostmaster
+		http://web.my.net/user/reset/1/1481228495/xukPdnbzGG6ZiufAzf0HyykLFYypUKW7Qspt6lu48jo/login
+	And I'm in
+	
+Step 9: Confirm Aegir looks right	
+	Log in using the providedlink, change PW
+	Check Platforms: should display
+		Platform: hostmaster
+		Release: drupal 7.50
+		Server: web
+		Verified: x seconds ago
+		Sites: 1
+
+
+
+
+1 time login:
+http://web.my.net/user/reset/1/1483041396/Vas2u9kEkDUZUcAi09BjT6d7O4N4Dmxl7U_iijbRjWk/login
+		

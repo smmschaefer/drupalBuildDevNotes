@@ -1,0 +1,179 @@
+sfpt down the platform zip file from marshall
+chown aegir.aegir cpagardens-7.x-1.2.tar.bz2
+
+
+the error I hit shouldnt be credential related
+maybe try drush vget profile or something like that after it bootstraps
+hmmm, not helpful so far
+
+======================================================
+Step 1: get the platform installed properly
+
+	cp -R cpagardens-7.x-1.2 /var/aegir/platforms/
+	then add a platform with the same name
+	and it verifies
+
+	drush @hostmaster hosting-tasks
+
+======================================================
+Step 2: Add a demo site:
+
+	1. Create a blank site with the name of my demo site
+		'Verify'
+	
+	2. Copy in the 'files' folder from the backup zip of the demo site
+		aegir@web:$ cp -r /home/vagrant/demo04.cpagardens.com/files/ /var/aegir/platforms/cpagardens-7.x-1.2/sites/demo04.cpagardens.com/files/
+
+		
+	HACK: disable mailgun to get past error
+		now site should verify
+		
+	3. Load in the database file
+		drush @demo04.cpagardens.com sqlc < /home/vagrant/demo04cpagardens.sql
+		/platforms/cpagardens-7.x-1.2/sites/demo04.cpagardens.com$ drush cc all
+		
+	4. Test - hit mailgun error
+		Mailgun Error message:
+			WD mailgun: Mailgun client initialization failed: Missing API key.
+			-
+			WD mail: Error sending e-mail (from "demo04.cpagardens.com" to webmaster@web.my.net).
+			change something in here: cpagardens-7.x-1.2\profiles\cpagardens
+			cpagardens-7.x-1.2\profiles\cpagardens\modules\contrib\mailgun
+			
+		I was sent the public/private keys:
+			public: pubkey-9e01336c55e84512e98ea85efa863ebb
+			Secret key: key-7fba703ea2215270c3a4c6a1f2f8cb78
+	
+		for now change from using mailgun as the default
+			Path: F:\fishlair\cypher\ryefish\Desktop\from_marshall\cpagardens-7.x-1.2\profiles\cpagardens\modules\cpagardens\cpagardens_core
+			EDIT: comment out in cpagardens_core_strongarm() 
+			#  $strongarm = new stdClass();
+			#  $strongarm->disabled = FALSE; /* Edit this to true to make a default strongarm disabled initially */
+			#  $strongarm->api_version = 1;
+			#  $strongarm->name = 'mail_system';
+			#  $strongarm->value = array(
+			#    'default-system' => 'MailgunMailSystem',
+			#    'user_import' => 'UserImportMailSystem',
+			#    'mailgun_test' => 'MailgunMailSystem',
+			#  );
+			#  $export['mail_system'] = $strongarm;
+	
+			EDIT: comment out cpagardens_core.info
+			#features[variable][] = mail_system
+	
+
+	5. Test - hit another error: WhiteScreenOfDeath
+		
+	6. Turn on error reporting and TBD (not sure what else its doing)
+		Enable error reporting:
+			drush @demo04.cpagardens.com vset error_level 2
+				this didn't show anything on its own
+			drush @demo04.cpagardens.com en dblog -y
+			refresh page
+			drush @demo04.cpagardens.com ws
+		TODO: look these up
+		
+	7. drush @demo04.cpagardens.com ws generates errors
+		aegir@web:~/platforms/cpagardens-7.x-1.2/sites/demo04.cpagardens.com$ drush @demo04.cpagardens.com ws
+				ID  Date          Type      Severity  Message
+				4   08/Dec 15:56  php       warning   Warning:
+				    require_once(/var/aegir/platforms/cpagardens-7.x-1.2/modules/o_contrib_seven/entitycache/includes/entit ycache.entitycachecontrollerhelper.inc):
+				    failed to open stream: No such file
+				3   08/Dec 15:56  file      notice    The file public://colorizer was not deleted, because it does not exist.
+				2   08/Dec 15:55  system    info      dblog module enabled.
+ 				1   08/Dec 15:55  system    info      dblog module installed.
+
+		entitycache is shared accross platforms
+			1. easiest thing to do is copy this into the required place
+				and then delete it when before pushing to prod
+			2. or better yet symlink it to an external place
+				NOTE: REVIEW THIS AND FIX IN FUTURE - PUTTING A HACK IN PLACE
+			3. OR maybe registry rebuild will fix this
+			
+		We went with installig and running registry rebuild
+
+	8. Install drush rr to rebuild registry
+		You can just drush @none dl registry_rebuild-7.x and drush will download it into your .drush folder. 
+		Alternately, you can obtain the package another way and copy the folder into .drush yourself: https://www.drupal.org/project/registry_rebuild	
+	
+		aegir@web:~/platforms/cpagardens-7.x-1.2/sites/demo04.cpagardens.com$ drush @none dl registry_rebuild-7.x
+		
+	9. Run drush rr generates errors:
+		aegir@web:~/platforms/cpagardens-7.x-1.2/sites/demo04.cpagardens.com$ drush rr
+			Manually deleted 13 stale files from the registry.                                                                                  [success]
+				13 files were declared in a module's .info, but could not be found. This is probably indicative of a bug. The missing files are     [warning]
+				modules/o_contrib_seven/advagg/tests/advagg.test, modules/o_contrib_seven/entitycache/entitycache.test,
+				modules/o_contrib_seven/entitycache/includes/entitycache.comment.inc,
+				modules/o_contrib_seven/entitycache/includes/entitycache.defaultentitycontroller.inc,
+				modules/o_contrib_seven/entitycache/includes/entitycache.entitycachecontrollerhelper.inc,
+				modules/o_contrib_seven/entitycache/includes/entitycache.node.inc,
+				modules/o_contrib_seven/entitycache/includes/entitycache.taxonomy.inc,
+				modules/o_contrib_seven/entitycache/includes/entitycache.user.inc,
+				modules/o_contrib_seven/filefield_nginx_progress/filefield_nginx_progress.install,
+				modules/o_contrib_seven/filefield_nginx_progress/filefield_nginx_progress.module,
+				modules/o_contrib_seven/robotstxt/robotstxt.admin.inc, modules/o_contrib_seven/robotstxt/robotstxt.install,
+				modules/o_contrib_seven/robotstxt/robotstxt.module.
+		Cannot open remote file /data/all/006/o_contrib_seven No such file or dir
+		Cannot open remote file /data/all/006/o_contrib_seven No such file or dir
+
+	10. Try to fix entitycache error:
+		Try: cp -R o_contrib_seven/ /var/aegir/platforms/cpagardens-7.x-1.2/modules/
+		
+		WD advagg: Reading from the file system failed. This can sometimes happen durning a deployment.                                     [warning]
+		sites/starter01.cpagardens.com/files/fontyourface/font.css
+		Notice: Undefined index: inner_container in theme_tabbed_carousel_render_region() 
+			(line 44 of /var/aegir/platforms/cpagardens-7.x-1.2/profiles/cpagardens/themes/rogue/styles/tabbed_carousel/tabbed_carousel.inc).
+		Notice: Undefined index: inner_container in theme_tabbed_carousel_render_region() 
+			(line 97 of /var/aegir/platforms/cpagardens-7.x-1.2/profiles/cpagardens/themes/rogue/styles/tabbed_carousel/tabbed_carousel.inc).
+
+	11. Not sure what happens here
+		drush @demo04.cpagardens.com dis cpagardens_boa
+		HACKHACK: Try putting entitycache where its looking for it and then disable it and then delete it
+		OK I'm missing o_contrib_seven folder: located at /data/all/006/o_contrib_seven
+			fpt it down
+			put it where Aegir is looking for it
+			still errs
+		remove the sym link to o_contrib_server
+			then copy over from server
+		
+
+
+
+
+========================================
+Issues encountered:
+
+1: This is just a warning and did not block the install
+
+Multi-byte UTF-8 for Drupal 7 is not supported on your system. See the documentation on adding 4 byte UTF-8 support for more information.
+Verified17 sec ago
+Publish path/var/aegir/platforms/cpagardens-7.x-1.2
+Web serverweb
+Releasedrupal 7.43
+StatusEnabled
+( https://hangouts.google.com/webchat/frame3?zx=1481673604 )
+
+==============
+
+2: Error: 
+	WD mailgun: Mailgun client initialization failed: Missing API key.
+	-
+	WD mail: Error sending e-mail (from "demo04.cpagardens.com" to webmaster@web.my.net).
+	change something in here: cpagardens-7.x-1.2\profiles\cpagardens
+	cpagardens-7.x-1.2\profiles\cpagardens\modules\contrib\mailgun
+	( https://hangouts.google.com/webchat/frame3?zx=1481673604 )
+
+Marshall Fix:
+	edit: cpagardens_core.strongarm.inc :line 41-50
+		comment out
+	edit: cpagardens_core.info: line 34
+		comment out
+
+============================
+
+3: Move missing files in place
+	only moved the 'files' folder
+
+
+
+scp -i cpagardens-7.x-1.2.tar.bz2 vagrant@127.0.0.1:/vms/cpag/.vagrant/machines/default/virtualbox/private_key
